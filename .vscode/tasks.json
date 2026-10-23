@@ -21,7 +21,20 @@
             "type": "npm",
             "script": "watch:esbuild",
             "group": "build",
-            "problemMatcher": "$esbuild-watch",
+            "problemMatcher": {
+                "owner": "esbuild-watch",
+                "fileLocation": [],
+                "pattern": {
+                    "kind": "file",
+                    "regexp": "(.*)",
+                    "file": 1
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "[watch] build started",
+                    "endsPattern": "[watch] build finished"
+                }
+            },
             "isBackground": true,
             "label": "npm: watch:esbuild",
             "presentation": {

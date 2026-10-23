@@ -3,6 +3,9 @@
 out/**
 node_modules/**
 src/**
+scripts/**
+.workbuddy/**
+reference/**
 .gitignore
 .yarnrc
 esbuild.js
@@ -12,3 +15,4 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+**/.DS_Store
