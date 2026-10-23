@@ -1,19 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-
-/**
- * 书籍接口定义
- */
-interface Book {
-    init(): Promise<void>;
-    getTitle(chapterIndex: number): string;
-    getAllTitles(): string[];
-    getPageContent(chapterIndex: number, pageIndex: number): string;
-    getChapterPageCount(chapterIndex: number): number;
-    getTotalChapters(): number;
-    reloadConfig(): void;
-    reformatAll(): void;
-}
+import { Book, paginate } from './book';
+import { EpubBook } from './epubBook';
 
 /**
  * 本地文件书籍实现
@@ -118,45 +106,7 @@ class FileBook implements Book {
     }
 
     private formatAndPaginate(fullText: string): string[] {
-        const lines: string[] = [];
-        let currentLine = "";
-
-        for (let i = 0; i < fullText.length; i++) {
-            const char = fullText[i];
-            
-            if (char === '\n') {
-                if (currentLine.trim().length > 0 || (lines.length > 0 && lines[lines.length - 1].trim().length > 0)) {
-                    lines.push(currentLine);
-                }
-                currentLine = "";
-                continue;
-            }
-            
-            if (char === '\r') {
-                continue;
-            }
-
-            currentLine += char;
-            
-            if (currentLine.length >= this._charsPerLine) {
-                lines.push(currentLine);
-                currentLine = "";
-            }
-        }
-        if (currentLine) {
-            lines.push(currentLine);
-        }
-
-        if (lines.length === 0) {
-            return ["(本章空)"];
-        }
-
-        const pages: string[] = [];
-        for (let i = 0; i < lines.length; i += this._linesPerPage) {
-            pages.push(lines.slice(i, i + this._linesPerPage).join('\n'));
-        }
-
-        return pages;
+        return paginate(fullText, this._linesPerPage, this._charsPerLine);
     }
 
     public getTitle(index: number): string {
@@ -183,7 +133,7 @@ class FileBook implements Book {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    const book = new FileBook();
+    const book = new DispatchBook();
     const reader = new Reader(book, context.globalState);
 
     // 异步初始化
@@ -199,6 +149,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('vscode-reader.nextChapter', () => reader.next()),
         vscode.commands.registerCommand('vscode-reader.prevChapter', () => reader.prev()),
         vscode.commands.registerCommand('vscode-reader.jumpChapter', () => reader.jump()),
+        vscode.commands.registerCommand('vscode-reader.pickBook', () => pickBook()),
         
         // 配置监听
         vscode.workspace.onDidChangeConfiguration(e => {
@@ -224,6 +175,96 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+/**
+ * 打开文件选择器挑选 .txt / .epub 书籍，写回 vscode-reader.filePath
+ */
+async function pickBook() {
+    const config = vscode.workspace.getConfiguration('vscode-reader');
+    const inspected = config.inspect<string>('filePath');
+
+    // 对话框起始目录：当前书籍所在目录
+    const currentPath = inspected?.workspaceFolderValue || inspected?.workspaceValue || inspected?.globalValue;
+    const defaultUri = currentPath ? vscode.Uri.file(currentPath) : undefined;
+
+    const uris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectMany: false,
+        canSelectFolders: false,
+        defaultUri,
+        openLabel: '选择书籍文件',
+        filters: {
+            '书籍文件 (txt/epub)': ['txt', 'epub'],
+            '纯文本 (txt)': ['txt'],
+            'EPUB 电子书 (epub)': ['epub']
+        }
+    });
+    if (!uris || uris.length === 0) {
+        return;
+    }
+
+    // 写回与当前值相同的作用域；当前未配置时写全局
+    let target = vscode.ConfigurationTarget.Global;
+    if (inspected?.workspaceFolderValue !== undefined) {
+        target = vscode.ConfigurationTarget.WorkspaceFolder;
+    } else if (inspected?.workspaceValue !== undefined) {
+        target = vscode.ConfigurationTarget.Workspace;
+    }
+    await config.update('filePath', uris[0].fsPath, target);
+}
+
+/**
+ * 按文件后缀分发：.epub → EpubBook，其余 → FileBook（.txt）
+ */
+class DispatchBook implements Book {
+    private _current: Book;
+
+    constructor() {
+        this._current = this._create();
+    }
+
+    private _create(): Book {
+        const p = vscode.workspace.getConfiguration('vscode-reader').get<string>('filePath', "");
+        return p.toLowerCase().endsWith('.epub') ? new EpubBook() : new FileBook();
+    }
+
+    public async init(): Promise<void> {
+        const wantEpub = vscode.workspace.getConfiguration('vscode-reader')
+            .get<string>('filePath', "").toLowerCase().endsWith('.epub');
+        if ((this._current instanceof EpubBook) !== wantEpub) {
+            this._current = this._create();
+        }
+        await this._current.init();
+    }
+
+    public getTitle(chapterIndex: number): string {
+        return this._current.getTitle(chapterIndex);
+    }
+
+    public getAllTitles(): string[] {
+        return this._current.getAllTitles();
+    }
+
+    public getPageContent(chapterIndex: number, pageIndex: number): string {
+        return this._current.getPageContent(chapterIndex, pageIndex);
+    }
+
+    public getChapterPageCount(chapterIndex: number): number {
+        return this._current.getChapterPageCount(chapterIndex);
+    }
+
+    public getTotalChapters(): number {
+        return this._current.getTotalChapters();
+    }
+
+    public reloadConfig(): void {
+        this._current.reloadConfig();
+    }
+
+    public reformatAll(): void {
+        this._current.reformatAll();
+    }
+}
 
 class Reader implements vscode.InlineCompletionItemProvider, vscode.Disposable {
     private _isEnabled: boolean = false;

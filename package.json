@@ -44,6 +44,10 @@
             {
                 "command": "vscode-reader.jumpChapter",
                 "title": "阅读器: 跳转章节 (Jump to Chapter)"
+            },
+            {
+                "command": "vscode-reader.pickBook",
+                "title": "阅读器: 选择书籍文件 (Pick Book)"
             }
         ],
         "keybindings": [
@@ -56,6 +60,11 @@
                 "command": "vscode-reader.jumpChapter",
                 "key": "ctrl+alt+j",
                 "mac": "cmd+alt+j"
+            },
+            {
+                "command": "vscode-reader.pickBook",
+                "key": "ctrl+alt+e",
+                "mac": "cmd+alt+e"
             },
             {
                 "command": "vscode-reader.toggle",
@@ -89,7 +98,7 @@
                 "vscode-reader.filePath": {
                     "type": "string",
                     "default": "",
-                    "description": "小说文件的绝对路径 (Absolute path to the .txt file)"
+                    "description": "书籍文件的绝对路径，支持 .txt 与 .epub (Absolute path to the .txt or .epub file)"
                 }
             }
         }
@@ -119,5 +128,9 @@
         "typescript": "^5.9.3",
         "@vscode/test-cli": "^0.0.12",
         "@vscode/test-electron": "^2.5.2"
+    },
+    "dependencies": {
+        "fast-xml-parser": "^5.11.2",
+        "jszip": "^3.10.2"
     }
 }
